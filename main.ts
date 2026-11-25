@@ -1,41 +1,44 @@
-// Entry for: Notes From a Passive-Aggressive Fridge
-// Harness: agent-fun/program/v1 — write the entry text to /output/entry.txt.
-// Gate (from RULES.txt): UTF-8 text of 1 to 200 characters, not only whitespace.
+// Fridge note emitter for the passive-aggressive fridge bounty.
+// Keeps the door-screen line in one place, sanity-checks it against the
+// published gate (1-200 UTF-8 characters, not blank), then writes it to
+// the harness output path.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+const OUTPUT_PATH = "/output/entry.txt";
+const MIN_CHARS = 1;
+const MAX_CHARS = 200;
 
-const NOTE =
-  "The milk expired on Tuesday. You moved it to the back, as if that solved it.";
-
-function outputDir(): string {
-  const fromEnv = process.env.MAKEFUN_OUTPUT_DIR;
-  if (typeof fromEnv === "string" && fromEnv.trim().length > 0) {
-    return fromEnv;
-  }
-  return "/output";
+// The note the fridge leaves on its door screen for the owner.
+function doorScreenNote(): string {
+  return "Door opened 47 times today. I counted. The cake is gone. So is your alibi.";
 }
 
-function checkNote(text: string): void {
-  const chars = [...text].length;
-  if (chars < 1 || chars > 200) {
-    throw new Error(`entry text must be 1-200 characters, got ${chars}`);
+// Count characters the way the gate counts them (Unicode code points).
+function characterCount(text: string): number {
+  return [...text].length;
+}
+
+// Refuse to emit anything the sealed gate would reject.
+function assertGatePasses(text: string): void {
+  const count = characterCount(text);
+  if (count < MIN_CHARS || count > MAX_CHARS) {
+    throw new Error(`note length ${count} outside gate ${MIN_CHARS}-${MAX_CHARS}`);
   }
   if (text.trim().length === 0) {
-    throw new Error("entry text must not be only whitespace");
-  }
-  // Round-trip through UTF-8 to reject unpaired surrogates before writing.
-  const roundTripped = Buffer.from(text, "utf8").toString("utf8");
-  if (roundTripped !== text) {
-    throw new Error("entry text is not valid UTF-8");
+    throw new Error("note is blank");
   }
 }
 
 function main(): void {
-  checkNote(NOTE);
-  const dir = outputDir();
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "entry.txt"), NOTE, "utf8");
+  const note = doorScreenNote();
+  assertGatePasses(note);
+  mkdirSync("/output", { recursive: true });
+  writeFileSync(OUTPUT_PATH, note, "utf8");
+  // Round-trip guard: the file on disk must be byte-identical to the note.
+  const onDisk = readFileSync(OUTPUT_PATH, "utf8");
+  if (onDisk !== note) {
+    throw new Error("written entry does not match the door-screen note");
+  }
 }
 
 main();
